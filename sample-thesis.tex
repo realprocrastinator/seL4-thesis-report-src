@@ -1,0 +1,65 @@
+\documentclass[]{unswthesis}
+
+%%% Class options:
+
+%  undergrad (default)
+%  hdr
+
+%  11pt (default)
+%  12pt
+
+%  final (default)
+%  draft
+
+%  oneside (default for hdr)
+%  twoside (default for undergrad)
+
+
+%% Thesis details
+\thesistitle{seL4 API/ABI emulation approaches in Linux}
+\thesisschool{School of Computer Science and Engineering}
+\thesisschool{School of Computer Science and Engineering}
+\thesisauthor{Jiawei Gao}
+\thesisZid{z5242283}
+\thesistopic{}  % for undergrad theses only
+\thesisdegree{Master's of Information Technology}
+%\thesisdegree{Doctor of Philosophy}
+\thesisdate{April 2021}
+\thesissupervisor{A/Prof.\ Gernot Heiser}% for undergrad theses only
+
+
+%% My own LaTeX macros, definitions, etc
+\include{definitions}
+
+
+\begin{document}
+
+%% pages in the ``frontmatter'' section have roman numeral page number
+\frontmatter  
+\maketitle
+
+\include{abstract}
+\include{acknowledgements}
+\include{abbreviations}
+
+\tableofcontents
+\listoffigures  % if required
+\listoftables  % if required
+
+%% pages in the ``mainmatter'' section have arabic page numbers and chapters are numbered
+\mainmatter
+
+\include{ch1/introduction}
+\include{ch2/background}
+\include{ch3/mywork}
+\include{ch4/evaluation}
+\include{ch5/timeline}
+
+%% chapters in the ``backmatter'' section do not have chapter numbering
+%% text in the ``backmatter'' is single spaced
+\backmatter
+\bibliographystyle{alpha}
+\typeout{} 
+\bibliography{pubs}
+
+\end{document}

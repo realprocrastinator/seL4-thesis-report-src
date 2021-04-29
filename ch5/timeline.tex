@@ -1,0 +1,14 @@
+\chapter{Project Plan}\label{ch:projplan}
+
+So far the work of this project has been done is the background research of the related projects as well as construct the basic solution model in a theoretical aspect. This report summarizes the related projects' ideas that can be borrowed in this project. QEMU is an existing solution for emulating the entire foreign system. While Cygwin and Wine project give the idea that we can avoid hardware virtualization of emulation to execute applications that target foreign systems by adding an extra compatibility layer at API or ABI layer. And the final project UML introduced an approach to port Linux kernel into Linux user space and intercept the system calls from the userspace by using $ptrace()$. With those ideas, we purposed the implementation of the project using the API layer emulation approach by modifying the system call libraries and using the ABI layer emulation approach by using $ptrace()$ system calls in Linux. The design and implementation details are not yet finalized at this stage. It's only a rough prototype that could potentially work. 
+
+\subsection{Timeline}
+Below is the timeline for future thesis research work.
+
+\begin{enumerate}
+    \item Port the seL4 kernel to the Linux userspace, and implement the basic framework for the API. This will take roughly 2 weeks, and will be done during the break of the semester 21T1
+    \item Refine the emulation framework, complete seL4's critical kernel functionalities, and pinpoint parts that are hard to emulate. At this stage, the emulation framework should be mostly functional. The plan is to achieve this stage before week3 in semester 21T2.
+    \item Evaluate the API emulation framework using the methods listed in this report and modify the implementation if necessary. We should complete evaluating the API emulation approach two weeks before the week5 of the semester 21T2.
+    \item Depending on the time left in the semester 21T2. The next stage will be either implementing the ABI emulation approach or refining the theoretical part of the ABI emulation approach and adding details of implementation in the Thesis Report as future work.
+    \item Preparing for the final demonstration and the presentation.
+\end{enumerate}
