@@ -1,10 +1,12 @@
-\chapter{Methods}\label{ch:methods}
+\chapter{Approach}\label{ch:approaches}
 
 At this stage, we are going to purpose a software development approach to tackle the problem. Running seL4 applications in Linux requires introducing an extra compatibility layer between the application and the Linux OS. Hence we are going to purpose two approaches to achieve this. The API layer emulation approach and the ABI layer emulation approach.  
 
 \section{API Layer Emulation Approach}
 
 In the original seL4 system, a userland seL4 client application can request OS services from another seL4 server application which also runs in the userland through IPC mechanisms provided by the seL4 kernel. The seL4 system call library provides those IPC interfaces. 
+
+(TODO: How does this related to the background?)
 
 However, if in our case those seL4 userland applications will run on top of Linux OS, and the semantics of system calls of Linux and seL4 are totally different. Directly using the original seL4 system call libraries will not work. Hence, we will provide a custom system call library that exports the same interfaces as the original seL4 system call libraries to seL4 userland applications, but instead of invoking the seL4 IPC directly, we will use Linux IPC mechanisms as a replacement.
 
@@ -28,19 +30,21 @@ In general we need to develop two components in this model.
 
 The seL4 emulation library is a compatibility layer named libseL4-emu in the figure which can be linked to other seL4 applications. Therefore, the seL4 applications will invoke the emulated seL4 system calls instead of the real original seL4 system calls. And the libseL4-emu library will dispatch those system call requests to the seL4 kernel simulator. 
 
-The seL4 kernel simulator runs at the user level on top of Linux. Hence the dispatching processes can be implemented using Linux IPC mechanisms, such as UDS(Unix Domain Socket) or shared memory. The seL4 kernel simulator mainly provides the real seL4 semantics and management of capability space, IPC mechanisms, scheduling context management, etc. 
+The seL4 kernel simulator runs at the user level on top of Linux. Hence the dispatching processes can be implemented using Linux IPC mechanisms, such as UDS or shared memory. The seL4 kernel simulator mainly provides the real seL4 semantics and management of capability space, IPC mechanisms, scheduling context management, etc. 
 
 In this model, all the seL4 applications and the seL4 kernel simulator are just regular Linux processes running at the user level. And the seL4 applications act as clients, communicating with the server which is our seL4 kernel simulator. 
 
 \subsection{Advantages and Disadvantages}
 
-Providing an API layer emulation approach has several advantages. First of all, this approach is ISA independent. In the model, all the seL4 applications and the seL4 kernel simulator all run at the user level, and the seL4 system call emulation layer is at a high layer providing the interface. From the perspective of seL4 applications, everything below the system call emulation library is abstracted away. It will never notice that it is no longer running on top of the real seL4 kernel. And since simulating seL4 system calls and seL4 kernel use functions provided by Linux. The real interactions with hardware are abstracted away by Linux. Therefore, using this approach only focuses on implementing the correct semantics of the real seL4 kernel.
+Providing an API layer emulation approach has several advantages. First of all, this approach is ISA independent. In the model, all the seL4 applications and the seL4 kernel simulator run at the user level, and the seL4 system call emulation layer provides the interfaces. From the perspective of seL4 applications, everything below the system call emulation library is abstracted away. Ideally, those applications shouldn't notice that they are no longer running on top of the real seL4 kernel, and Linux provides the functions to emulate the seL4 system calls and seL4 kernel. The real interactions with hardware are abstracted away by Linux. Therefore, this approach focuses on implementing the correct semantics of the real seL4 kernel.
 
-Secondly, in the API layer approach, the implementation of simulating the seL4 IPC mechanisms uses Linux IPC mechanisms which is also very performant. Ideally, we won't introduce too much overhead. Moreover, since everything runs at the user level including the seL4 kernel, no hardware-level virtualization or emulation is involved at all. Meanwhile, regarding the complexity of implementation, this approach is relatively easy to implement.
+(TODO: explain why the performance should be good? Comparing to Virtualization/ Emulation? VM exit/ VM_enter, IPC heavy/light? Context Switches in this approached requires 4 traps, native seL4 requires 2 traps) Secondly, in the API layer approach, the implementation of simulating the seL4 IPC mechanisms uses Linux IPC mechanisms which is also very performant. Ideally, we won't introduce too much overhead. Moreover, since everything runs at the user level including the seL4 kernel, no hardware-level virtualization or emulation is involved at all. Meanwhile, regarding the complexity of implementation, this approach is relatively easy to implement.
 
 However, the main disadvantage of the API layer emulation is that it is not binary compatible. This is because the emulation will work only if the seL4 applications are linked with the seL4 system call emulation library. Hence, we have to obtain the source code of the application first and recompile the source with the emulation library every time we want to use the emulation.    
 
 \section{ABI Layer Emulation Approach}
+
+(TODO: relation to the background review)
 
 In the former approach, we have introduced the API layer emulation which is not binary compatible, while in this approach we are going purpose a method to achieve binary compatibility. 
 
@@ -62,14 +66,16 @@ In the figure, mainly we have two components:
     \item An seL4 application binary loader 
 \end{enumerate}
 
-In the rest of the article, we will call the seL4 application monitor as the monitor, and the seL4 application binary loader as the binary loader for simplicity. The main challenge in this approach is that since the seL4 application is an unmodified binary code, hence it will invoke the real seL4 system calls. In that case, we have to redirect the system calls and observe what is the seL4 application requesting then serve the system call by ourselves according to the real seL4 semantics. To achieve this goal, we are going to use the $ptrace()$ system call in Linux.
+In the rest of the article, we will call the seL4 application monitor the (TODO emphasize) monitor, and the seL4 application binary loader the (TODO emphasize) binary loader for simplicity. The main challenge in this approach is that since the seL4 application is an unmodified binary code, hence it will invoke the real seL4 system calls. In that case, we have to redirect the system calls and observe what is the seL4 application requesting then serve the system call by ourselves according to the real seL4 semantics. To achieve this goal, we are going to use the $ptrace()$ system call in Linux.
 
 $ptrace()$ allows a tracer process to observe and control the execution of the other process. The "tracee" process can be attached to the "tracer" process, so that the "tracer" can modify the "tracee" process's memory, registers, etc. Also, the $ptarce()$ semantics allow us to establish a one-to-many relationship, which means we can have several "tracees", but can only have one "tracer". In this approach, we can leverage such a feature to intercept the system call invocation from the seL4 applications.
+
+(TODO: Why the model is requireed and what does the loader do?)
 
 In the model described above, the monitor acts as our "tracer", and the seL4 applications are our "tracees". The monitor is also a seL4 kernel simulator providing the same seL4 semantics and kernel mechanisms as the real seL4 kernel does. The emulation starts from the monitor forks a binary loader process that can load the seL4 application's ELF file into the memory and set up the appropriate memory regions for it. Next, the binary loader will block and notify the monitor that the initialization has finished. The monitor can use $ptrace()$ to control the seL4 application. Finally, the seL4 application can continue executing after the $ptrace()$ process finishes. Now, every time the seL4 application invokes a seL4 system call, the monitor will be notified and suspend the execution of the seL4 application, then the monitor will inspect the system calls requests and do appropriate actions to serve them.
 
 \subsection{Advantages and Disadvantages}
-The main advantage of this approach is that the kernel ABI approach is binary compatible. As long as, we obtain the binary code of the seL4 applications that we would like to emulate, no recompilation is required. However, using the ABI layer emulation can introduce some overhead. This is because every time the seL4 application invokes a seL4 system call. The monitor will use $ptrace()$ to intercept it and modify the arguments, return value if necessary, and the $ptrace()$ itself is a system call, which requires trapping into the kernel. The trade-off here is leading to a penalty of the performance. Besides, $ptrace()$ is usually used to implement the Linux debuggers, and it only allows on "tracer" to exist at any time. Therefore, we have to provide our own debugging interfaces in some way, which can introduce implementation complexity.  
+The main advantage of this approach is that the kernel ABI approach is binary compatible. As long as, we obtain the binary code of the seL4 applications that we would like to emulate, no recompilation is required. However, using the ABI layer emulation will introduce overhead. This is because every time the seL4 application invokes a seL4 system call. The monitor will use $ptrace()$ to intercept it and modify the arguments, return value if necessary, and the $ptrace()$ itself is a system call, which requires trapping into the kernel. The trade-off here is leading to a penalty of the performance. Besides, $ptrace()$ is usually used to implement the Linux debuggers, and it only allows on "tracer" to exist at any time. Therefore, we have to provide our own debugging interfaces in some way, which can introduce implementation complexity.  
 
 \section{Comparison Between API and ABI Layer Emulation}
 
@@ -103,3 +109,5 @@ Approach &
   Second \\ \hline
 \end{tabular}}
 \end{table}
+
+(TODO: why ABI emulation approach is ISA independent, It is not as the ELF file will be different, in this project targeting to x86)
