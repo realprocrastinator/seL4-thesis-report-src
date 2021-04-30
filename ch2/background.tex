@@ -93,7 +93,7 @@ In summary, adding compatibility at the API layer can solve most of the problems
 
 Even though Cygwin is used to make Unix-like applications compatible with the Windows environment, we can still leverage the nice idea that Cygwin uses. To emulate seL4 in Linux we can link applications to a specific library that remaps the system calls with the underlying host's system calls.
 
-\subsection{API-level Emulation}
+\subsection{ABI-level Emulation}
 
 In the previous section, we have introduced Cygwin，which is an API-compatible solution for providing compatibility between Windows and Linux. However, the downside is that it's not binary compatible as we have to obtain the source code first and recompile it. In that case,  if we can't obtain the source code or the application that we want to emulate directly invokes functions via a foreign system's ABI, then it's impossible to perform the emulation. Hence, in this section, we will introduce two ABI-level emulations which are binary compatible.
 
