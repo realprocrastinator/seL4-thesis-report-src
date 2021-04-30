@@ -6,21 +6,27 @@ In this chapter, we will purpose some evaluation approaches regarding to both AP
 
 One way to evaluate whether the implementation of the emulation approaches is successful or not is to test the emulation framework with some existing seL4 applications. In this project, we are going to use applications from the following source:
 
-(TODO: better layout, put description in each paragraph)
+(Fixed: better layout, put description in each paragraph)
 
-\begin{itemize}
-    \item seL4 tutorials
-    \item seL4 test suit (TODO: Correct naming)
-    \item SOS(simple operating system) (TODO: Correct naming)
-\end{itemize}
+%\begin{itemize}
+%    \item seL4 tutorials
+%    \item seL4Test (Fixed: Correct naming)
+%    \item SOS(simple operating system) (Fixed: Correct naming)
+%\end{itemize}
+
+\subsection{seL4 tutorials}
 
 The seL4 tutorials contain several trivial seL4 applications used for demonstration and education purposes.
 
 Those applications mainly focus on demonstrating seL4 features and API usage including printing "Hello World", simple IPC message passing, setting up runnable threads in seL4 userland, etc. Those applications can be used to use to test each of the emulated seL4 features separately.
 
-The seL4 test suit (TODO: naming) contains several unit tests that focus on low-level kernel APIs. As those tests were used to prove the correctness of the implementation of the real seL4 kernel and some seL4 helper libraries. Therefore, we can use those tests to evaluate the implementation of the seL4 kernel simulator. However, since the seL4 kernel simulator fully running in the Linux userspace, it doesn't have the access to the hardware and performs privilege options. We don't expect the kernel simulator can pass all of the tests. We will focus more on testing critical functionalities, such as the IPC mechanisms, cspace management. vspace management and scheduling, etc, and skip those tests that are not quite important to the emulation project or those are complex or even impossible to emulate correctly such as cache tests, multicore tests, etc.
+\subsection{seL4Test}
 
-The SOS is a simple multitasking operating system running on the seL4 kernel which has an interactive shell, and several subsystems including I/O, memory management, process management, etc. Since it has a relatively complex structure and more comprehensive functionalities implemented with seL4 semantics. Hence, emulating it using the emulation approach can be a nice way to both verify and demonstrate the emulation approaches function well.
+The seL4Test (Fixed: naming) contains several unit tests that focus on low-level kernel APIs. As those tests were used to prove the correctness of the implementation of the real seL4 kernel and some seL4 helper libraries. Therefore, we can use those tests to evaluate the implementation of the seL4 kernel simulator. However, since the seL4 kernel simulator fully running in the Linux userspace, it doesn't have the access to the hardware and performs privilege options. We don't expect the kernel simulator can pass all of the tests. We will focus more on testing critical functionalities, such as the IPC mechanisms, cspace management. vspace management and scheduling, etc, and skip those tests that are not quite important to the emulation project or those are complex or even impossible to emulate correctly such as cache tests, multicore tests, etc.
+
+\subsection{Simple operating system project}
+
+The simple operating system is a simple multitasking operating system running on the seL4 kernel which has an interactive shell, and several subsystems including I/O, memory management, process management, etc. Since it has a relatively complex structure and more comprehensive functionalities implemented with seL4 semantics. Hence, emulating it using the emulation approach can be a nice way to both verify and demonstrate the emulation approaches function well.
 
 \section{Quantitative Evaluation}
 
