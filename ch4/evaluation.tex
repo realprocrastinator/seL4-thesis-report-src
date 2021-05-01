@@ -1,37 +1,38 @@
 \chapter{Evaluation}\label{ch:eval}
 
-In this chapter, we will purpose some evaluation approaches regarding to both API layer emulation and ABI layer emulation approaches. Despite the fact that the real implementation and the benchmark haven't been finished yet we can still set up some criteria in terms of the implementation in both a qualitative aspect and a quantitative aspect. 
+In this chapter, we will propose some evaluation approaches regarding to both API layer emulation and ABI layer emulation approaches. Despite the fact that the real implementation and the benchmark haven't been finished yet, we can still set up some criteria in terms of the implementation in both a qualitative aspect and a quantitative aspect. 
 
 \section{Qualitative Evaluation} 
 
 One way to evaluate whether the implementation of the emulation approaches is successful or not is to test the emulation framework with some existing seL4 applications. In this project, we are going to use applications from the following source:
 
-(Fixed: better layout, put description in each paragraph)
+% (Fixed: better layout, put description in each paragraph)
 
 %\begin{itemize}
 %    \item seL4 tutorials
-%    \item seL4Test (Fixed: Correct naming)
-%    \item SOS(simple operating system) (Fixed: Correct naming)
+%    \item seL4Test % (Fixed: Correct naming)
+%    \item SOS(simple operating system) % (Fixed: Correct naming)
 %\end{itemize}
 
-\subsection{seL4 tutorials}
+\subsection{seL4 Tutorials}
 
 The seL4 tutorials contain several trivial seL4 applications used for demonstration and education purposes.
 
-Those applications mainly focus on demonstrating seL4 features and API usage including printing "Hello World", simple IPC message passing, setting up runnable threads in seL4 userland, etc. Those applications can be used to use to test each of the emulated seL4 features separately.
+Those applications mainly focus on demonstrating seL4 features and API usage including printing "Hello World", simple IPC message passing, setting up runnable threads in seL4 userland and so on. Those applications can be used to use to test each of the emulated seL4 features separately.
 
 \subsection{seL4Test}
 
-The seL4Test (Fixed: naming) contains several unit tests that focus on low-level kernel APIs. As those tests were used to prove the correctness of the implementation of the real seL4 kernel and some seL4 helper libraries. Therefore, we can use those tests to evaluate the implementation of the seL4 kernel simulator. However, since the seL4 kernel simulator fully running in the Linux userspace, it doesn't have the access to the hardware and performs privilege options. We don't expect the kernel simulator can pass all of the tests. We will focus more on testing critical functionalities, such as the IPC mechanisms, cspace management. vspace management and scheduling, etc, and skip those tests that are not quite important to the emulation project or those are complex or even impossible to emulate correctly such as cache tests, multicore tests, etc.
+The seL4Test contains several unit tests that focus on low-level kernel APIs. As those tests were used to prove the correctness of the implementation of the real seL4 kernel and some seL4 helper libraries, therefore, we can use those tests to evaluate the implementation of the seL4 kernel simulator. However, since the seL4 kernel simulator runs in the Linux userspace, it doesn't have the access to the hardware and performs privileged operations. We don't expect the kernel simulator can pass all of the tests. We will focus more on testing critical functionalities, such as the IPC mechanisms, cspace management, vspace management and scheduling and skip those tests that are not quite important to the emulation project or those are complex or even impossible to emulate correctly such as cache tests, multicore tests and so on.
 
 \subsection{Simple operating system project}
 
-The simple operating system is a simple multitasking operating system running on the seL4 kernel which has an interactive shell, and several subsystems including I/O, memory management, process management, etc. Since it has a relatively complex structure and more comprehensive functionalities implemented with seL4 semantics. Hence, emulating it using the emulation approach can be a nice way to both verify and demonstrate the emulation approaches function well.
+The simple operating system is a simple multitasking operating system running on the seL4 kernel which has an interactive shell, and several subsystems including I/O, memory management, process management and so on. Since it has a relatively complex structure and more comprehensive functionalities implemented with seL4 semantics, emulating it using the emulation approach can be a nice way to both verify and demonstrate the emulation approaches function well.
 
 \section{Quantitative Evaluation}
 
 From the qualitative perspective, we are going to evaluate the two approaches via microbenchmark and macrobenchmark. Table \ref{tb:expt} is the expected quantitative benchmarking outcome.
 
+(TODO: add boarder)
 \begin{table}[]
 \centering
 \caption{Expected success criteria}
@@ -61,7 +62,7 @@ From the qualitative perspective, we are going to evaluate the two approaches vi
 
 The microbenchmark mainly focuses on evaluating the performance of each emulated system call. We can measure the number of system calls that the seL4 application invokes per second. The higher the result, the better the performance. Besides, to make the result more representative, we should measure the result several times and make a statistical analysis.
 
-The ideal expectation is listed in the table \ref{tb:expt}. In general, we expect the API emulation approach will not introduce too much overhead, and the result should be slower compared to the result of running the same application on the native seL4 kernel. In the worst case, the overhead upper bound shouldn't exceed an order of magnitude. While comparing to the result of using ABI layer emulation, hardware virtualization, or emulation approach, the API layer emulation should be faster. This is because, in the API layer approach, all the real seL4 system calls are emulated, which can save some of the overhead of trapping into the kernel.  
+The ideal expectation is listed in the table \ref{tb:expt}. In general, we expect the API emulation approach will not introduce too much overhead, and the result should be slower compared to the result of running the same application on the native seL4 kernel. In the worst case, the overhead's upper bound shouldn't exceed an order of magnitude. While comparing to the result of using ABI layer emulation, hardware virtualization, or emulation approach, the API layer emulation should be faster. This is because, in the API layer approach, all the real seL4 system calls are emulated, which can save some of the overhead of trapping into the kernel.  
 
 On the other hand, the ABI layer emulation approach should be faster than using any hardware emulation or virtualization, but slower than the API layer emulation approach, because intercepting system calls will introduce relatively high overhead.   
 
