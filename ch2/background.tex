@@ -1,27 +1,60 @@
 \chapter{Background}\label{ch:background}
 
-In the fisrt section, we are going introduce some basics of the design in seL4, then move on to the next section where defines the challenge that we are going to solve in this thesis. Finally, we are going to introduce three related projects, and present how those projects solve the similar problem that we faced in this thesis.     
+In the first section, we are going to introduce some basics of the design in seL4, then move on to the next section where defines the challenge that we are going to solve in this thesis. In the final section, we will introduce some related projects that provide emulation at ISA, ABI, and API layers，and then discuss their trade-offs. We will first introduce an existing solution to the problem that we face using QEMU. Then we will introduce other three related projects from the API layer emulation approach using Cygwin down to ABI layer emulation approaches provided by Wine and UML.      
 
 \section{Overview of seL4}
 
-seL4 has been formally verified for correctness (\cite{Klein_EHACDEEKNSTW_09}) and is the fastest microkernel in the world. The componentized system architecture that seL4 implements enforce the isolation between those untrusted components and other trusted components running on top of the kernel. seL4 was born for safety. The fine-grained capability-based access control model carefully manages the access to the hardware resources from the software components. 
+seL4 has been formally verified for correctness (\cite{Klein_EHACDEEKNSTW_09}) and is the fastest microkernel in the world. seL4 adheres to the principle of $minimality$, only provides the critical kernel functionalities that can't be achieved in the user-level implementation. Such design minimizes the TCB in seL4, making it possible to be formally verified. seL4 was born for safety. The componentized system architecture that seL4 implements enforce the isolation between those untrusted components and other trusted components running on top of the kernel. With the fine-grained capability-based access control model seL4 can carefully manage the access to the hardware resources from the software components. In this section, we will present the current state of relevant seL4 features to motivate this thesis. First, we will introduce the powerful and robust capability system in seL4. Then we will introduce the system calls in seL4 and the resource management. Finally, we will introduce the scheduling system in seL4.
 
-(TODO: Formal descriptio of seL4!)
-\subsection{Functionalities in seL4}
+(Fixed: Formal descriptio of seL4!)
 
-(TODO: Cpabilities)
+\subsection{Cpabilities}
 
-(TODO: Communication and System calls)
+In seL4, the access rights to any resources are represented by capabilities. When the kernel launches the initial task, which is the $root task$, the capabilities to all the resources are also handed to it. The root task is the first seL4 user-level thread which will take care of the resource allocation in the future. Capabilities reside in the seL4 capability space also called $cspace$, which consists of several capability nodes called $cnodes$, each $cnode$ is a table that has several slots. Those slots can contain either capability to the next $cnode$ or a capability to a kernel resource or be empty. Hence, $cnodes$ form a directed graph in the $cspace$. The $cspace$ maps the access rights to kernel object identifiers. Resolving the capability requires resolving the $cspace$ address to find the final slot. According to the seL4 semantics, there are several operations to manipulate capabilities for different purposes, such as copy, mint with a badge, move, mutate with a badge, delete or revoke, etc. When the capability is copied or minted with a specific unforgeable token called a badge, it's said to be derived. However, not all the capabilities can be derived. The seL4 kernel will keep track of the capability derivation via the capability derivation tree to delete a capability (only remove such capability from the $cnode$) or revoke (also remove all the capabilities derived from such capability) it later.
 
-(TODO: Memory Management)
+\subsection{Communication}
 
-(TODO: Scheduling)
+The seL4 provides both synchronous and asynchronous communication methods through IPC via endpoints and notifications via notification objects. 
 
-The secure and well design of the seL4 microkernel together with the formal verification ensure the kernel itself is robust and is the ideal foundation to build a secure system on top of it (\cite{Klein_AEHCDEEKNSTW_10}). What's more, seL4 is not only secure but also fast. With its performant IPC mechanisms and most advanced mixed critical real-time systems (\cite{Lyons_Heiser_14}) (TODO: use the new paper), seL4 is capable of handling a wide range of real-world scenarios. However, seL4 is relatively young comparing to other mainstream kernels, such as Linux, and its ecosystem is still growing. For those seL4 developers, there are limited tools that can be used while developing seL4 systems. On the other hand, Linux provides us a powerful developing environment with lots of useful tools. Therefore, the main motivation of this project is to explore some ways to leverage the Linux tools in terms of development to make developing seL4 systems much easier and faster.
+\subsubsection{IPC}
+
+In the seL4, two threads can communicate with each other via either a blocking fashion or a non-blocking fashion over an endpoint. It can be a one-way message passing from sender to the receiver, or a two-way fashion which implements a $rendezvous$ model, where the sender will wait for a reply from the receiver. In the design of seL4, to send the message via IPC, the sender must specify the length of the message payload. If the message payload is large, then it will be stored in each thread's IPC buffer, and the kernel will copy the payload from the sender's buffer to the receiver's buffer, while if it is small, no memory copy is required, the message payload will be stored in the registers instead to improve performance. In seL4 the system calls are mainly for communication, they are $seL4_Send$, $seL4_NBSend$, $seL4_Call$, $seL4_Reply$, $seL4_Recv$, $seL4_NBRecv$, and $seL4_Yield$. The first four are sending system calls, the middle two are receiving system calls and the last one is the schduling system call. Most of other methods for manipulating the kernel objects are implemented using those critical system calls. Since the IPC mechanisms are critical to the performance in seL4, seL4 implements a fast code path to further optimize the IPC performnace when several conditions are satisfied. In general, those conditions are: 
+
+\begin{enumerate}
+    \item the sender is using $seL4_Call$ or the receiver is using $seL4_ReplyRecv$,
+    \item No capbilities should be transferred,
+    \item The data in the message must fit into the $seL4_FastMessageRegisters$ registers without using IPC buffer,
+    \item the receiver has a valid address space without any memory faults,
+    \item the receiver has the highest priority among all the threads in the scheduler,
+\end{enumerate}
+
+Besides the system calls, the seL4 also utilities IPC between teh kernel and the receiver to handle the thread faults. In the seL4, when a thread generates a thread fault, the kernel will suspend the execution of the faulting thread and constructs a message, which contains the information about the faulting thread, then send the message to the specific endpoint where a fault handler thread is waiting on. After the fault handler corrects the anomaly, it can either explicitly tell the kernel to resume the faulting thread or invoke the reply object to inform the kernel. 
+
+\subsubsection{Notification}
+
+The notification mechanism provides an asynchronous method for seL4 threads to send signals to each other. It is primarily used for handling the interrupt and maintain synchronisation between threads. The notification object can have three states: waiting, active or idle, and it consists of a word of data, where the badge will be stored and accumulated if no threads are waiting on it. By using notification objects, a thread can poll or block on an interrupt. On the other hand, a notification object can also be bound to the thread so that the thread can receive the notification issued while blocking on the endpoint waiting for IPC. Such design avoids using one dedicated thread for receiving IPCs and the other one for receiving notifications.
+
+\subsection{Memory Management}
+
+Since the design seL4 adheres to the $minimality principle$, the seL4 kernel itself doesn't handle the memory management. Such OS services are implemented at the user level. When the kernel boots, it will first allocate a small, static amount of memory for itself. Those memories have already been mapped so that the kernel can directly access them. However, the size of such memory is platform-specific. Then it will start the $root task$, and pass the untyped physical memory along with the capabilities to all the resources to the root task. Those untyped memories can be retyped into different kernel objects such as $cnodes$, $frames$, $page tables$, etc. With such a design, it's very flexible for the system developer to decide the specific memory layout. However, no fixed-size data structure can be used in the kernel as the kernel can't assume the memory layout.
+
+\subsection{Scheduling}
+
+In the seL4's implementation, the kernel will choose the head of the list queued at the scheduler with the highest priority as the next thread to run. To lookup for the highest priority efficiently, seL4 uses a two-level bit field to track the priority lists consisting of runnable threads in the schedular. The first level of the bit field divides the priority levels into several sets, each bit represents a set of the priority levels. Also, it is the index to the second-level bit field array. Each bit in the entry of the second-level bit filed array maps a priority level in the current set. Such data structure ensures only two words need to be resolved to get the highest priority.
+
+\subsubsection{Traditional Scheduling}
+
+In seL4, there are two main scheduling policies, the first policy is the traditional one that implements a round-robin scheduler with 256 priority levels. Each thread has two attributes, a maximum controlled priority and an effective priority which must be less than the maximum controlled priority. The priority levels can be changed through the thread's capabilities. A Thread can run until it exhausts its timeslice or gets preempted by the other threads with higher priorities, or it can give up the execution manually by calling $seL4_yield$.
+
+\subsubsection{MCS scheduling}
+
+In the traditional seL4, the schedular prioritizes the thread with the highest priority, which means if the thread happens to be the only one with the highest priority, it will monopolise the CPU unless a thread with higher priority occurs or it finishes its task. To overcome such a problem, seL4 introduces its own MCS scheduling. The seL4's MCS scheduling can be enabled by changing the configuration when building the kernel. In the implementation of the seL4's MCS, each thread has a scheduling context that contains a budget that determines how long the thread can run and a period that determines how often the thread can run. (TODO: MCS paper). Those two attributes form an upper bound of the thread's execution time and prevent the high-priority thread from monopolising the CPU. The seL4's MCS scheduling mechanism allows it to provide strong time resources isolation to the components with different criticalities besides the space resources isolated which are guaranteed by capabilities. Therefore, seL4 offers great support for real-time systems.
 
 \section{Challenge}
 
-Developing applications targeted for seL4 in Linux is challenging because seL4 as a microkernel has different semantics and OS model based on seL4 comparing with Linux (In figure \ref{fig:osmodel}).
+The secure and well design of the seL4 microkernel together with the formal verification ensure the kernel itself is robust and is the ideal foundation to build a secure system on top of it (\cite{Klein_AEHCDEEKNSTW_10}). What's more, seL4 is not only secure but also fast. With its performant IPC mechanisms and most advanced mixed critical real-time systems (\cite{Lyons_Heiser_14}) (TODO: use the new paper), seL4 is capable of handling a wide range of real-world scenarios. However, seL4 is relatively young comparing to other mainstream kernels, such as Linux, and its ecosystem is still growing. For those seL4 developers, there are limited tools that can be used while developing seL4 systems. On the other hand, Linux provides us a powerful developing environment with lots of useful tools. Therefore, the main motivation of this project is to explore some ways to leverage the Linux tools in terms of development to make developing seL4 systems much easier and faster.
+
+But developing applications targeted for seL4 in Linux is challenging because seL4 as a microkernel has different semantics and OS model based on seL4 comparing with Linux (In figure \ref{fig:osmodel}).
 
 \begin{figure}[h] (Fixed: fix the bad scaling problem)
     \centering
@@ -110,7 +143,7 @@ In Wine's architecture, the critical libraries are implemented using shared libr
 
 \subsubsection{User-mode Linux}
 
-(TODO: This whole section suffers from being written bottom-up (or bottom-down?) rather than to-down. There's no big-picture view, no abstractions, just a collection of seemingly random detail. Iris totally impenetrable by someone who doesn't have a lot of OS Ann's Linux background )
+(Fixed: This whole section suffers from being written bottom-up (or bottom-down?) rather than to-down. There's no big-picture view, no abstractions, just a collection of seemingly random detail. Iris totally impenetrable by someone who doesn't have a lot of OS Ann's Linux background )
 
 UML is an old project used to port a Linux kernel to the userspace. This can be helpful to the system developers as it provides a nice way to develop and debug the kernel as well as to make several interesting applications possible for Linux (\cite{JD06}). 
 
