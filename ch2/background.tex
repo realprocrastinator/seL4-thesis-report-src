@@ -145,16 +145,20 @@ In Wine's architecture, the critical libraries are implemented using shared libr
 
 (Fixed: This whole section suffers from being written bottom-up (or bottom-down?) rather than to-down. There's no big-picture view, no abstractions, just a collection of seemingly random detail. Iris totally impenetrable by someone who doesn't have a lot of OS Ann's Linux background )
 
-UML is an old project used to port a Linux kernel to the userspace. This can be helpful to the system developers as it provides a nice way to develop and debug the kernel as well as to make several interesting applications possible for Linux (\cite{JD06}). 
+In this section, we will introduce how UML provides a way to simulate the Linux kernel in the user space using its own functions and intercept the system calls using $ptrace()$. The similar idea will be applied to the approach in the next chapter.
 
-In UML's architecture, it treats Linux as a platform to which the kernel can be ported. All the implementation fully leverages the Linux system calls without any modification of the host kernel. And all the user-level code can run natively on the processors without any instruction emulation overhead. The implementation creates a separate thread that uses the $ptrace()$ system call to trace all the other threads running in UML. 
+UML is an old project used to port a Linux kernel to the userspace. It enables multiple virtual Linux kernel-based operating systems to run as a regular Linux process in the host Linux's user sapce. This can be helpful to the system developers as it provides a nice way to develop and debug the kernel as well as to make several interesting applications possible for Linux (\cite{JD06}). 
 
 (TODO: explain the how to the tracing thread control the context switch)
+
+Implementation-wise, UML treats Linux as a platform to which the kernel can be ported. All the user-level code can run natively on the processors without any instruction emulation overhead, and UML implements critical OS services by leveraging the Linux system calls without any modification of the host kernel.  
 
 \subsubsection{System Call}
 
 (TODO: Diagram)
-Since the transition between user mode and the kernel mode is controlled by the tracing thread, it will intercept all the signals and system calls that the running process issues and then transit from the user mode to the kernel mode and continue executing the particular process without tracing it. (TODO: add constraint that this happens in the emulated mode) The distinction of the user mode and the kernel mode is whether the process is being traced by the tracing thread. After changing the register which contains the syscall number into the syscall number for $getpid()$ and restoring a previously saved thread registers state, the tracing thread will invoke the syscall handler to accomplish the syscall request, then finally return the process to the user mode. 
+System calls are the critical interfaces for the user mode processes to request OS services, and the invocation of the system call will lead to a context switch from the user mode to the kernel mode. However, hardware platforms instead of Linux provide the mechanism of switching between the user mode and the kernel mode and enforing the lack of privileges in the user mode. Hence, UML constructs such mechanism using the $ptrace$ system call in Linux. It also implements a separate thread for tracing all the other threads via $ptrace$. 
+
+With such design, UML can distinguish whether a process is in the UML kernel mode or in the UML user mode. Those two modes are emulated in the UML. If the process is the UML user mode, then it is beting traced by the tracing thread, and if it is the UML kernel mode, it will not be traced. The tracing thread will also intercept all the signals and system calls that the running process issues, and then it will suspend the execution of the running process and switch the state of the running process into the UML kernel mode by not tracing it. After that, the tracing thread will replace the register which contains the system call number with the system call number of $getpid$ to anull the original system call in the host kernel. Next the tracing thread will save the process's registers into a data structure and load a new state to it so that it can invoke the system call handler. Once this is done, the ssytem call handler will read the system call numbers and the arguments, and then execute the such system call and let it be handled by the host kernel. After the system call finishes, the process will save the return value in tis register and the tracing thread will resume the process's routine by restoring the other saved registers of the process and continue tracing its system calls. At this satge, the process is back to the UML user mode again.   
 
 \subsubsection{Trap and Fault}
 
@@ -165,27 +169,25 @@ For the memory fault, UML implements with the $SIGSEGV$ and invokes the handler 
 
 \subsubsection{Interrupt}
 
-(TODO: Explain what those signals are. As the reader won't know)
+(fixed: Explain what those signals are. As the reader won't know)
 
-UML also implements external interrupts and timer interrupts using $SIGIO$ and $SIGALARM$ or $SIGVTALARM$ depending on whether the interrupted process is idling or not. For the external interrupts, it uses $select$ to check which file descriptor has received input then invokes the IRQ handler. For the timer interrupt, UML also treats it similarly to treating the external interrupt and invokes the particular IRQ handler. 
-
-\subsubsection{Scheduling}
-
-(TODO: explain it well instead of just mention as an overview)
-
-For process scheduling, UML implements scheduling processes by stoping an outgoing one and running an ingoing one as each process has its thread belongs to it. Since each process has its own address space, UML also manages the page mapping of each process as well as the $SIGIO$ queued in each process.
+Since the interrupt happens asynchronously, UML implements external interrupt and timer interrupt using signals. More specifically, UML implements the timer interrupt using $SIGALARM$ or $SIGVTALARM$ depending on whether the interrupted process is idling or not. Both two signals will be sent to the process when the time limit specified in a call to a preceding $alarm$ setting function (such as $setitimer$) elapses. However, $SIGALRM$ is sent when real or clock time elapses, and the $SIGVTALRM$ is sent when CPU time is used by the process elapses. Hence, if the process is idling, the $SIGALARM$ will be sent. Otherwise, $SIGVTALARM$ will be sent. On the other hand, the $SIGIO$ is used to implement the external interrupt which is generated by devices because the $SIGIO$ will be generated as long as a device receives data. UML uses $select$ to figure out which file descriptor is expecting an I/O event. IRQ handlers will be invoked to handle the timer interrupt and the external interrupt once associated signals are received by the process.
 
 \subsubsection{Virtual memory}
 
 In UML, the kernel and process's virtual memory is implemented as a physical memory-sized file mapping into their address spaces. However, some regions in the address space will be reserved by placing kernel code and data which is unusable.
 
+\subsubsection{Context Switching}
+
+(Fixed: explain it well instead of just mention as an overview)
+
+A context switch in UML involves suspending the current running UML process and executing the other UML process. Giving each UML process its own address space avoids a total remapping of the process's address space when the context switch happens. However, it's necessary to remap those pages of the switching-in process that have been unmapped when it was switched out to ensure consistency. UML marks those pages using specific bits in the page table entry when a modification in the page table entry happens and clears those bits when the host updates the mapping of the pages. Besides handling mapping pages UML also handles the pending I/O events when the context switch happens. UML implements the device interrupt with $SIGIO$ which can be queued to a UML process. Hence, UML will update the $SIGIO$ registration from the switch-out process to the switch-in process to ensure the system is consistent.        
+
 \subsubsection{Host filesystem access}
 
 UML also implements a virtual file system called $hostfs$ which translates the directly into the functions in the host's $libc$. Hence, it provides direct access to the host filesystem.
 
-UML was a nice project showing a novel way to use Linux interfaces to implement itself, also it demonstrated that porting a kernel in the userspace can be beneficial to both kernel and application development.
-
-From this project's perspective, UML gives us the hint of how to leverage $ptrace$ to intercept the system call from the process being traced as well as how to simulate the kernel in the userspace.
+UML was a nice project showing a novel way to use Linux interfaces to implement itself, also it demonstrated that porting a kernel in the userspace can be beneficial to both kernel and application development. From this thesis's perspective, UML gives us the hint of how to leverage $ptrace$ to intercept the system call from the process being traced as well as how to simulate the kernel in the userspace.
 
 
 
