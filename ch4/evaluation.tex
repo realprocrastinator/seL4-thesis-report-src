@@ -32,23 +32,25 @@ The simple operating system is a simple multitasking operating system running on
 
 From the qualitative perspective, we are going to evaluate the two approaches via microbenchmark and macrobenchmark. Table \ref{tb:expt} is the expected quantitative benchmarking outcome.
 
-(TODO: add boarder)
+% (Fixed: add boarder)
 \begin{table}[]
 \centering
 \caption{Expected success criteria}
 \label{tb:expt}
-\resizebox{\textwidth}{!}{\begin{tabular}{lll}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{lll}
 \addlinespace[0.2cm] 
- &
+                             &
   syscall API emulation (A1) &
   kernel ABI emulation (A2) \\
-  \addlinespace[0.2cm]
+  \hline
+\addlinespace[0.2cm]
 \toprule
 \begin{tabular}[c]{l}On the emulated \\ hardware by QEMU (B1)\end{tabular} &
-  \begin{tabular}[c]{l}A1 should be significantly \\ faster than B1 because no \\ hardware emulation is involved\end{tabular} &
-  \begin{tabular}[c]{l}A2 should be significantly faster \\ than B1 but slower than A1 due \\ to syscall interception\end{tabular} \\
-  \addlinespace[0.2cm]
-  
+\begin{tabular}[c]{l}A1 should be significantly \\ faster than B1 because no \\ hardware emulation is involved\end{tabular} &
+\begin{tabular}[c]{l}A2 should be significantly faster \\ than B1 but slower than A1 due \\ to syscall interception\end{tabular} \\
+\addlinespace[0.2cm]
+
 \begin{tabular}[c]{l}Native hardware running \\ seL4 (B2)\end{tabular} &
   \begin{tabular}[c]{l}A1 should be less than an OoM \\ slower than B2 because seL4 is \\ highly optimized\end{tabular} &
   \begin{tabular}[c]{l}A2 should be significantly \\ slower than B2 due to syscall \\ interception\end{tabular}

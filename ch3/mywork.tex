@@ -55,13 +55,6 @@ In the former approach, we have introduced the API layer emulation, which is not
 % (Fixed: loder -> loader)
 \subsection{Design Model} 
 
-\begin{figure}[h]
-    \centering
-    \includegraphics[clip, trim=0.5cm 16cm 8cm 0.5cm, width=0.8\textwidth, height=0.8\textwidth]{ch3/model2-v2.pdf}
-    \caption{The model of ABI layer emulation approach}
-    \label{fig:mabi}
-\end{figure}
-
 Figure \ref{fig:mabi} shows the model of the ABI layer emulation approach.
 
 In the figure, mainly we have two components:
@@ -70,6 +63,13 @@ In the figure, mainly we have two components:
     \item An seL4 application monitor
     \item An seL4 application binary loader 
 \end{enumerate}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[clip, trim=0.5cm 12cm 6cm 3cm, width=0.8\textwidth, height=0.8\textwidth]{ch3/model2-v2.pdf}
+    \caption{The model of ABI layer emulation approach}
+    \label{fig:mabi}
+\end{figure}
 
 In the rest of the article, we will call the seL4 application monitor the \emph{monitor}, and the seL4 application binary loader the \emph{binary loader} for simplicity. The main challenge in this approach is that since the seL4 application is an unmodified binary code, it will invoke the real seL4 system calls. In that case, we have to intercept the system calls and observe what is the seL4 application requesting then serve the system call by ourselves according to the real seL4 semantics. To achieve this goal, we are going to use the $ptrace()$ system call in Linux.
 
