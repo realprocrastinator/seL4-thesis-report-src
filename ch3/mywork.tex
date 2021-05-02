@@ -52,7 +52,7 @@ However, the main disadvantage of the API layer emulation is that it is not bina
 
 In the former approach, we have introduced the API layer emulation, which is not binary compatible, while in this approach, we are going propose a method to achieve binary compatibility. However, the main challenge is redirecting the system calls issued by the seL4 applications without modifying the source code. Both Wine and UML projects introduce different approaches of providing compatibility at the ABI layer to achieve such a goal. But in Wine's architecture, the system call libraries are implemented as a shared library, while the seL4 build system uses a statically linked method. Therefore, we will implement the ABI layer emulation approach using the idea given by the UML project, which is using the $ptrace()$ system call in Linux.
 
-(TODO: loder -> loader)
+% (Fixed: loder -> loader)
 \subsection{Design Model} 
 
 \begin{figure}[h]
