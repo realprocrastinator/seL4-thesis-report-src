@@ -99,7 +99,6 @@ Since QEMU can emulate CPU using dynamic binary translation, this means that QEM
 
 Although QEMU is an existing solution to emulate the seL4 system in Linux at the ISA layer, it's not an optimal option for emulating a high-performance microkernel like seL4 because of the overhead of hardware virtualization or machine emulation. In the former case, if the guest system such as our seL4 performs a privileged instruction, then it will trigger a trigger a world switch to the host (e.g. VMEXIT) to the host, and such overhead is not negligible. In the latter case, if QEMU resorts to dynamic binary translation, then it will have to perform a full machine emulation and translate the ISA into the host's ISA, which introduces significant overhead. However, the design goal of QEMU focuses on low-level machine emulation. It's helpful to inspect each instruction's execution of the CPU, but it's hard to use from a high-level seL4 developers' perspective. Because the debugger is not OS aware, the guest OS's context switch might confuse the debugger and lead to a breakpoint missing or a wrong variable value issue. In the following sections, we will introduce other approaches performing emulation at different layers, and then propose approaches used in this thesis to tackle the problem that we stated before in chapter \ref{ch:approaches}.
 
-
 \subsection{API-level Emulation}
 
 As we mentioned before, the ISA-level emulation involves emulating the emtire machine or using virtualization technologies, which introduces non-negligible overhead. In this section, we will introduce a project which performs emulation approach at the API layer to provide compatibility between two different systems.
@@ -108,9 +107,16 @@ As we mentioned before, the ISA-level emulation involves emulating the emtire ma
 
 % Cygwin32: A Free Win32 Porting Layer for Unix Applications
 
-Cygwin is a compatibility layer that allows Unix-like applications to run on top of Windows (\cite{enwikicygwin}). This is achieved by introducing a DLL called cygwin1.dll which acts as an emulation layer providing substantial POSIX system call functionalities providing a Unix semantics. Cygwin also provides several standard Unix utilities such as bash, etc.
+Cygwin is a compatibility layer that allows Unix-like applications to run on top of Windows (\cite{enwikicygwin}). This is achieved by introducing a DLL called cygwin1.dll which acts as an emulation layer providing substantial POSIX system call functionalities providing a Unix semantics (figure \ref{fig:cyg}). Cygwin also provides several standard Unix utilities such as bash, etc.
 
-(TODO: diagram of the architecture)
+\begin{figure}[h]
+    \centering
+    \includegraphics[clip, trim=0.5cm 16cm 3cm 0.5cm, width=0.9\textwidth, height=0.8\textwidth]{ch2/Cyg-arch.pdf}
+    \caption{The architecture of Cygwin}
+    \label{fig:cyg}
+\end{figure}
+
+% (Fixed: diagram of the architecture)
 Cygwin began development in 1995 at Cygnus Solutions. In the project, developers provided interfaces called Cygwin API to add the missing Unix-like functionalities in Win32 API, such as fork, signals, select, etc (\cite{Cygwin}). Cygwin will not magically make any POSIX application's binary code runnable on top  Windows directly. Executing those POSIX applications require the recompilation of the application. source code of the POSIX application can be recompiled using Cygwin and linked with DLL which implements the POSIX system call semantics using the Win32 APIs and native NT APIs. After executing the application, the Cygwin DLL will be loaded into the application's test region so that it has full access to the whole process. Next, shared memory is created containing the instances of the resources that the shared library can access. Therefore, the OS resources such as file descriptors can be tracked. Besides such shared memory regions, each process also has its resource bookkeeping structures, such as signal masks, PID, etc.
 
 Cygwin has several nice designs to implement the POSIX features in Windows. For example, it handles signals by starting a separate thread from the library for only signal handling purposes. This thread waits for the Windows event used to pass signals to the process, and scan through its signal bitmask to handle the signals appropriately. However such thread resides in the same address space as the executing program, the signal sending function for sending a signal to other processes is wrapped with a mutex, and the signal sending function which sends the signal to itself is wrapped by separate semaphore or event pair to avoid them being interrupted. 
@@ -138,30 +144,39 @@ In the previous section, we have introduced Cygwin, which is an API-compatible s
 % https://en.wikipedia.org/wiki/Wine_(software)#Basic_architecture
 % (Fixed: Need to be improved, add more internals related to Wine)
 
-(TODO: 
+% (Fixed: 
+% 1. Win and Linux has different ABI, ELF and SysV ABI conventions, Win uses PE with its own ABI system, fastcall, cdecl, etc. 
+% 2. Wine -> compatibility layer entirely in the user mode. Custom peloader.
+% 3. Majority of the Win app doesn't use system call directly,  but instead calls "personality layer" <- the most popular one is Win32. 
+% 4. Explain again how seL4 apps are typically coded this way by using libseL4-API. 
+% 5. Wine provides API compatibility DLLs so that the Win32 apps will be linked to these DLLs instead and thus calling Wine's internal function, which translates such % calls to POSIX equivalent or so.
+% )
 
-1. Win and Linux has different ABI, ELF and SysV ABI conventions, Win uses PE with its own ABI system, fastcall, cdecl, etc. 
+In the previous section, we have introduced an approach to run POSIX applications on top of Windows using Cygwin. In this section, we will introduce a way to run Windows applications on a Unix-like OS such as Linux. The challenge is that Windows and Linux use different ABIs. An ABI is a low-level hardware-dependent format that defines how the computational routines or data structures are accessed by machine code. Considering the difference between the Window's ABIs and the Linux's ABIs, such as calling conventions, binary format of executable files, system call semantics, and so on, it's impossible to execute a Windows application on top of Linux directly. However, Wine provides such binary compatibility between those two systems (\cite{enwikiWine}).      
 
-2. Wine -> compatibility layer entirely in the user mode. Custom peloader.
+Unlike QEMU, Wine doesn't emulate the internal Windows logic like a virtual machine or an emulator. Instead, it directly translates the Windows ABI into POSIX-compliant calls. It implements Windows's ABI entirely in the user space, rather than a kernel module. Wine supports several executable formats and provides custom binary loaders for those fromats, such as DOS executable that is an old format, Windows NE executable that uses the 16-bit format, Windows PE executable that becomes the native format after Windows 95, and the Winelib executable that is written using Windows API but compiled as a Unix executable. Because Wine can support old Windows executable format, its internal implementation works differently depending on which executable format is executed. For example, Wine will launch a separate Unix process for each Win32 process with the PE format. However, it will only create Unix threads for Win16 tasks in a dedicated Wine process called Windows on Windows process. To allow the Win16 process run in a separate address space, Wine also implements a process called $winevdm$.  
 
-3. Majority of the Win app doesn't use system call directly,  but instead calls "personality layer" <- the most popular one is Win32. 
+Implementation-wise, Wine leverages the fact that most Windows applications usually invoke some particular DLL libraries, which invoke the user-mode gdi32/user32 libraries, and then finally invoke the system calls via Windows subsystems such as Win32 instead of invoking a system call directly. This is somehow similar to how seL4 applications request OS services through invoking APIs provided by the seL4 system call libraries. 
 
-4. Explain again how seL4 apps are typically coded this way by using libseL4-API. 
+Wine's architecture is close to the Windows NT architecture (figure \ref{fig:wine}). In Windows NT architecture, the gdi/gdi32, user/user32, and the kernel/kernel32 are the core system DLLs as well as the NTDLL allows implementing different subsystems layered on top of it such as Win32 in the kernel32 DLL, therefore, Wine completely implements those four core system DLLs to provide compatibility. Wine implements those DLLs similar to the APIs in Windows platforms as much as possible so that Win32 applications can be linked with those Wine DLLs and thus can invoke Wine's internal functions. Those functions can be translated into POSIX equivalent by Wine.
 
-5. Wine provides API compatibility DLLs so that the Win32 apps will be linked to these DLLs instead and thus calling Wine's internal function, which translates such calls to POSIX equivalent or so. 
+The other backbone of Wine's architecture is the Wine server which mainly implements the communication, synchronisation, and management mechanisms of Wine's processes. The communication between Wine's processes and the Wine server uses UDS and the shared memory called request buffer. Each thread of the process in Wine shares a request buffer with the Wine server. Hence, when a thread wants to communicate with other threads or processes, it can fill the request buffer and informs the Wine to handle the request via the socket.
 
-First example that provides the compatibility layer to run Windows applications in Unix-like operating systems is called Wine (\cite{enwikiWine}). However, Wine doesn't emulate the internal Windows logic like a virtual machine or an emulator. Instead, it directly translates the Windows ABI into POSIX-compliant calls. Besides, Wine also provides various Windows services through Wineserver as well as other Windows components. In Wine's architecture, it implements Windows's ABI entirely in the user space, rather than a kernel module. 
+Even though Wine gives a wise way to provide binary compatibility at the ABI layer, we can't imitate the whole implementation of Wine, as in Wine's architecture most of the libraries are dynamically loaded, but libraries are statically linked in seL4. In the next section, we will introduce another approach to achieve binary compatibility.  
 
-A system call from a Windows application usually invokes a particular DLL library, which in turn invokes the user-mode GDI/user32 libraries, and then finally invokes the system calls via Win32 subsystem. However, since the architecture of Windows OS is a hybrid model of monolithic kernel combined with the microkernel, some OS services run as separate processes, so applications need to invoke RPCs to communicate the user-mode services. In that case, this is somehow similar to how seL4 applications request OS services. Although Wine implements the Wineserver to provide services that are provided by the Windows kernel, as well as other OS functionalities, it's impossible to implement all the aspects of the Windows kernel as well as to use native Windows drivers due to the internal architecture of Wine. 
-
-In Wine's architecture, the critical libraries are implemented using shared libraries and loaded dynamically at runtime, while in the seL4 system, all the binary codes are statically linked. So we can't imitate Wine's architecture and implementation. However, with a similar idea as the Wine project, we can still target the emulation layer of seL4 applications at the kernel ABI layer to achieve binary compatibility.
+\begin{figure}[h]
+    \centering
+    \includegraphics[clip, trim=0.5cm 16cm 3cm 0.5cm, width=0.9\textwidth, height=0.8\textwidth]{ch2/Wine-arch.pdf}
+    \caption{The architecture of Wine (left) vs the architecture of Windows NT (right)}
+    \label{fig:wine}
+\end{figure}
 
 \subsubsection{User-mode Linux}
 
 % (Fixed: This whole section suffers from being written bottom-up (or bottom-down?) rather than to-down. There's no big-picture view, no abstractions, just a 
 % collection of seemingly random detail. Iris totally impenetrable by someone who doesn't have a lot of OS Ann's Linux background )
 
-In this section, we will introduce how UML provides a way to simulate the Linux kernel in the user space using its own functions and intercept the system calls using $ptrace()$. The similar idea will be applied to the approach in the next chapter.
+In this section, we will introduce how does UML provide a way to simulate the Linux kernel in the user space using its own functions and intercept the system calls using $ptrace()$. The similar idea will be applied to the approach in the next chapter.
 
 UML is an old project used to port a Linux kernel to the userspace. It enables multiple virtual Linux kernel-based operating systems to run as a regular Linux process in the host Linux's user sapce. This can be helpful to the system developers as it provides a nice way to develop and debug the kernel as well as to make several interesting applications possible for Linux (\cite{JD06}). 
 
@@ -171,17 +186,31 @@ Implementation-wise, UML treats Linux as a platform to which the kernel can be p
 
 \subsubsection{System Call}
 
-(TODO: Diagram)
-System calls are the critical interfaces for the user mode processes to request OS services, and the invocation of the system call will lead to a context switch from the user mode to the kernel mode. However, hardware platforms instead of Linux provide the mechanism of switching between the user mode and the kernel mode and enforing the lack of privileges in the user mode. Hence, UML constructs such mechanism using the $ptrace$ system call in Linux. It also implements a separate thread for tracing all the other threads via $ptrace$. 
+% (Fixed: add diagram of syscall ctrl flow)
 
-With such design, UML can distinguish whether a process is in the UML kernel mode or in the UML user mode. Those two modes are emulated in the UML. If the process is the UML user mode, then it is beting traced by the tracing thread, and if it is the UML kernel mode, it will not be traced. The tracing thread will also intercept all the signals and system calls that the running process issues, and then it will suspend the execution of the running process and switch the state of the running process into the UML kernel mode by not tracing it. After that, the tracing thread will replace the register which contains the system call number with the system call number of $getpid$ to anull the original system call in the host kernel. Next the tracing thread will save the process's registers into a data structure and load a new state to it so that it can invoke the system call handler. Once this is done, the ssytem call handler will read the system call numbers and the arguments, and then execute the such system call and let it be handled by the host kernel. After the system call finishes, the process will save the return value in tis register and the tracing thread will resume the process's routine by restoring the other saved registers of the process and continue tracing its system calls. At this satge, the process is back to the UML user mode again.   
+System calls are the critical interfaces for the user mode processes to request OS services, and the invocation of the system call will lead to a context switch from the user mode to the kernel mode. However, hardware platforms instead of Linux provide the mechanism of switching between the user mode and the kernel mode and enforing the lack of privileges in the user mode. Hence, UML constructs such mechanism using the $ptrace$ system call in Linux. It also implements a separate thread for tracing all the other threads via $ptrace$. This thread is notified when a thread is entering or leaving a system call, and has the ability to arbitrarily modify the system call and its return value. This capability is used to read out the system call and its arguments, annull the system call, and divert the process into the UML user space kernel code to execute it.
+
+With such design, UML can distinguish whether a process is in the UML kernel mode or in the UML user mode. Those two modes are emulated in the UML. If the process is the UML user mode, then it is beting traced by the tracing thread, and if it is the UML kernel mode, it will not be traced. The tracing thread will also intercept all the signals and system calls that the running process issues, and then it will suspend the execution of the running process and switch the state of the running process into the UML kernel mode by not tracing it. After that, the tracing thread will replace the register which contains the system call number with the system call number of $getpid$ to anull the original system call in the host kernel. Next the tracing thread will save the process's registers into a data structure and load a new state to it so that it can invoke the system call handler. Once this is done, the ssytem call handler will read the system call numbers and the arguments, and then execute the such system call and let it be handled by the host kernel. After the system call finishes, the process will save the return value in tis register and the tracing thread will resume the process's routine by restoring the other saved registers of the process and continue tracing its system calls. At this satge, the process is back to the UML user mode again (figure \ref{fig:uml-sys}).
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[clip, trim=0.5cm 16cm 3cm 0.5cm, width=0.9\textwidth, height=0.8\textwidth]{ch2/UML-syscall.pdf}
+    \caption{The control flow of handling system call in UML}
+    \label{fig:uml-sys}
+\end{figure}
 
 \subsubsection{Trap and Fault}
 
-(TODO: Diagram)
-UML not only virtualizes system calls but also implements several other Linux OS services and functionalities. For example, to handle the processor traps or faults, it implements those with signals and installs handlers for each. Once the tracing thread captures the signals that the process received, it will switch to the kernel mode and continue executing the process in the handler.
+% (Fixed: Diagram)
 
-For the memory fault, UML implements with the $SIGSEGV$ and invokes the handler to figure out whether the fault was because of legal access to an unmapped page or illegal memory access. 
+UML not only virtualizes system calls but also implements several other Linux OS services and functionalities. For example, on physical machines, traps are caused by some piece of hardware like the clock, a device, or the memory management hardware forcing the CPU into the appropriate trap handler in the kernel. UML implements trap with Linux signals. The timer interrupt is implemented with the $SIGALRM$ and $SIGVTALRM$, I/O device interrupts with $SIGIO$ and memory faults with $SIGSEGV$. The UML kernel declares its handlers for these signals. These handlers must run in the UNL kernel mode with system call interception off (figure \ref{fig:uml-sig}). The first is done by registering the handler to run on an alternate stack, the UNL process kernel stack, rather than the process stack. The second is accomplished by the handler requesting that the tracing thread turn off system call tracing until it is ready to re-enter the UML user mode.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[clip, trim=0.5cm 16cm 3cm 0.5cm, width=0.9\textwidth, height=0.8\textwidth]{ch2/UML-sig.pdf}
+    \caption{The control flow of handling signal in UML}
+    \label{fig:uml-sig}
+\end{figure}
 
 \subsubsection{Interrupt}
 
@@ -189,15 +218,15 @@ For the memory fault, UML implements with the $SIGSEGV$ and invokes the handler 
 
 Since the interrupt happens asynchronously, UML implements external interrupt and timer interrupt using signals. More specifically, UML implements the timer interrupt using $SIGALARM$ or $SIGVTALARM$ depending on whether the interrupted process is idling or not. Both two signals will be sent to the process when the time limit specified in a call to a preceding $alarm$ setting function (such as $setitimer$) elapses. However, $SIGALRM$ is sent when real or clock time elapses, and the $SIGVTALRM$ is sent when CPU time is used by the process elapses. Hence, if the process is idling, the $SIGALARM$ will be sent. Otherwise, $SIGVTALARM$ will be sent. On the other hand, the $SIGIO$ is used to implement the external interrupt which is generated by devices because the $SIGIO$ will be generated as long as a device receives data. UML uses $select$ to figure out which file descriptor is expecting an I/O event. IRQ handlers will be invoked to handle the timer interrupt and the external interrupt once associated signals are received by the process.
 
-\subsubsection{Virtual memory}
-
-In UML, the kernel and process's virtual memory is implemented as a physical memory-sized file mapping into their address spaces. However, some regions in the address space will be reserved by placing kernel code and data which is unusable.
-
 \subsubsection{Context Switching}
 
 % (Fixed: explain it well instead of just mention as an overview)
 
 A context switch in UML involves suspending the current running UML process and executing the other UML process. Giving each UML process its own address space avoids a total remapping of the process's address space when the context switch happens. However, it's necessary to remap those pages of the switching-in process that have been unmapped when it was switched out to ensure consistency. UML marks those pages using specific bits in the page table entry when a modification in the page table entry happens and clears those bits when the host updates the mapping of the pages. Besides handling mapping pages UML also handles the pending I/O events when the context switch happens. UML implements the device interrupt with $SIGIO$ which can be queued to a UML process. Hence, UML will update the $SIGIO$ registration from the switch-out process to the switch-in process to ensure the system is consistent.        
+
+\subsubsection{Virtual memory}
+
+UML emulates the virtual memory by the kernel, and the process's virtual memory is implemented as a physical memory-sized file mapping into their address spaces. However, switching from the UNL user mode to the UML kernel mode doesn't automatically switch the address spaces as they are the same from the host's view. UML resolves the conflicts with process memory by placing the kernel text and data in areas that processes are not likely to use. In UML, a memory fault causes a $SIGSEGV$ to be delivered to the process. The segmentation fault handler does the necessary checking to determine whether it was a UML kernel mode or UML user-mode fault, and in the user-mode case, whether the page is supposed to be present or not. If the page is supposed to be present, then the kernel's page fault mechanism is called to allocate the page and read in its data if necessary. The segmentation fault handler then maps in the new page with the correct permissions and returns. On the other hand, if the fault was not a legitimate page fault, then the UML kernel either panics or sends a $SIGSEGV$ to the process depending on whether the fault was in UML kernel mode or UML user mode.  
 
 \subsubsection{Host filesystem access}
 
