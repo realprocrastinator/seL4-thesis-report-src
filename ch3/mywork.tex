@@ -32,7 +32,7 @@ The seL4 emulation library is a compatibility layer named libseL4-emu in the fig
 
 The seL4 kernel simulator is a regular user-level Linux application. Hence the emulated seL4 applications can communicate with the seL4 kernel simulator using Linux IPC, such as UDS or shared memory. The seL4 kernel simulator mainly provides the seL4 semantics and management of capability space, IPC mechanisms, scheduling context management, etc. 
 
-In this model, all the seL4 applications and the seL4 kernel simulator are just regular Linux processes running at the user level. The seL4 applications act as clients, communicating with the server which is our seL4 kernel simulator. 
+In this model, all the seL4 applications and the seL4 kernel simulator are just regular Linux processes running at the user-level. The seL4 applications act as clients, communicating with the server which is our seL4 kernel simulator. 
 
 \subsection{Advantages and Disadvantages}
 
@@ -42,7 +42,7 @@ The API layer emulation approach has several advantages. First of all, it is rel
 
 Secondly, since simulating the seL4 IPC mechanisms uses Linux IPC mechanisms won't introduce too much overhead, the performance should be relatively good compared to fully emulating a machine using QEMU. But it's hard to give an intuitive result of comparing this approach with the hardware virtualization approach using QEMU without further detailed measurement. Although the hardware virtualization will introduce the overhead due to the word switching, the API layer emulation approach will require at least four context switches between the seL4 client application, the seL4 kernel simulator, and the seL4 server application.
 
-Whatsmore, this approach is ISA independent. In the model, all the seL4 applications and the seL4 kernel simulator run at the user level, and the seL4 system call emulation layer provides the interfaces. From the perspective of seL4 applications, everything below the system call emulation library is abstracted away. Ideally, those applications shouldn't notice that they are no longer running on top of the real seL4 kernel and communicate with the seL4 simulator server through the emulated seL4 system calls. Linux provides hardware abstractions, hence, this approach focuses on implementing the correct semantics of the real seL4 kernel.
+Whatsmore, this approach is ISA independent. In the model, all the seL4 applications and the seL4 kernel simulator run at the user-level, and the seL4 system call emulation layer provides the interfaces. From the perspective of seL4 applications, everything below the system call emulation library is abstracted away. Ideally, those applications shouldn't notice that they are no longer running on top of the real seL4 kernel and communicate with the seL4 simulator server through the emulated seL4 system calls. Linux provides hardware abstractions, hence, this approach focuses on implementing the correct semantics of the real seL4 kernel.
 
 However, the main disadvantage of the API layer emulation is that it is not binary compatible. Furthermore, the emulation will work only if the seL4 applications are are programmed to use seL4 system call emulation library instead of invoking seL4 system calls directly. Hence, we have to obtain the source code of the application first and recompile the source with the emulation library every time we want to use the emulation.    
 
